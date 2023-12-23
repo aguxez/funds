@@ -133,7 +133,7 @@ func buildRow(c category, inputValue int) table.Row {
 		c.name,
 		strconv.Itoa(c.percentage),
 		// At this point we have the complete value
-		strconv.Itoa(inputValue * c.percentage / 100),
+		strconv.Itoa(inputValue*c.percentage/100) + "€",
 	}
 }
 
