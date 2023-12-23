@@ -15,11 +15,9 @@ type InputState int
 
 const (
 	PENDING_INPUT InputState = iota
+	INPUT_ERR
 	INPUT_SENT
 )
-
-var baseStyle = lipgloss.NewStyle().
-	BorderStyle(lipgloss.NormalBorder())
 
 // category represents a group of elements with a global percentage, for example, fixed costs
 type category struct {
@@ -70,53 +68,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			m.inputState = INPUT_SENT
-
-			// Build the tables we'll use in the View
-			// Categories first
-			categoryColumns := []table.Column{
-				{Title: "Name", Width: 20},
-				{Title: "Percentage", Width: 10},
-				{Title: "Amount", Width: 10},
-			}
-
 			intInput, err := strconv.Atoi(m.input.Value())
 			if err != nil {
+				m.inputState = INPUT_ERR
 				return m, tea.Quit
 			}
 
-			var categoryRows []table.Row
-			for _, category := range m.categories {
-				categoryRows = append(
-					categoryRows,
-					table.Row{
-						category.name,
-						strconv.Itoa(category.percentage),
-						// At this point we have the complete value
-						strconv.Itoa(intInput * category.percentage / 100),
-					},
-				)
-			}
-
-			categoriesTable := table.New(
-				table.WithColumns(categoryColumns),
-				table.WithRows(categoryRows),
-				table.WithHeight(len(m.categories)),
-			)
-
-			style := table.DefaultStyles()
-			style.Header = style.Header.
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(lipgloss.Color("182")).
-				BorderBottom(true).
-				Bold(false)
-
-			// Overrides the selected effect in the table to an empty one.
-			style.Selected = style.Selected.Foreground(lipgloss.Color(""))
-
-			categoriesTable.SetStyles(style)
-
-			m.categoriesTable = categoriesTable
+			m.buildCategoriesTable(intInput)
+			m.inputState = INPUT_SENT
 
 			return m, tea.Quit
 		}
@@ -130,26 +89,66 @@ func (m model) View() string {
 
 	if m.inputState == PENDING_INPUT {
 		// Header
-		output += "What is the received income?\n\n"
+		output += "Input income?\n\n"
 		output += m.input.View()
 		// Footer
 		output += "\n\nPress 'esc' to quit\n"
 	}
 
 	if m.inputState == INPUT_SENT {
-		_, err := strconv.Atoi(m.input.Value())
-
-		if err != nil {
-			return "There was an error reading your input"
-		}
-
-		// We have to calculate the spendings/amounts based on percentages and fixed costs.
-		// Show categories and their percentages or amounts.
-		// These tables were built when initializing the model.
-		output = baseStyle.Render(m.categoriesTable.View()) + "\n"
+		output = lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			Render(m.categoriesTable.View()) + "\n"
 	}
 
 	return output
+}
+
+func (m *model) buildCategoriesTable(intInput int) {
+	categoryColumns := []table.Column{
+		{Title: "Name", Width: 20},
+		{Title: "Percentage", Width: 10},
+		{Title: "Amount", Width: 10},
+	}
+
+	var categoryRows []table.Row
+	for _, category := range m.categories {
+		categoryRows = append(categoryRows, buildRow(category, intInput))
+	}
+
+	categoriesTable := table.New(
+		table.WithColumns(categoryColumns),
+		table.WithRows(categoryRows),
+		table.WithHeight(len(m.categories)),
+	)
+
+	style := buildStyle()
+	categoriesTable.SetStyles(style)
+
+	m.categoriesTable = categoriesTable
+}
+
+func buildRow(c category, inputValue int) table.Row {
+	return table.Row{
+		c.name,
+		strconv.Itoa(c.percentage),
+		// At this point we have the complete value
+		strconv.Itoa(inputValue * c.percentage / 100),
+	}
+}
+
+func buildStyle() table.Styles {
+	style := table.DefaultStyles()
+	style.Header = style.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("182")).
+		BorderBottom(true).
+		Bold(false)
+
+	// Overrides the selected effect in the table to an empty one.
+	style.Selected = style.Selected.Foreground(lipgloss.Color(""))
+
+	return style
 }
 
 func main() {
